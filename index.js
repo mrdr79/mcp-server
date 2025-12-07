@@ -1,39 +1,34 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-import cheerio from "cheerio";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Tìm bài hát bằng cách đọc JSON nhúng trong HTML
 async function searchZing(keyword) {
-  const searchUrl = `https://zingmp3.vn/tim-kiem/bai-hat?q=${encodeURIComponent(keyword)}`;
-  const html = await axios.get(searchUrl, {
+  const url = `https://zingmp3.vn/tim-kiem/tat-ca?q=${encodeURIComponent(keyword)}`;
+  const html = await axios.get(url, {
     headers: { "User-Agent": "Mozilla/5.0" }
   }).then(r => r.data);
 
-  const $ = cheerio.load(html);
+  // Lấy JSON từ script trong trang
+  const jsonMatch = html.match(/"data":(\{.*?\}),"status"/s);
+  if (!jsonMatch) return null;
 
-  let result = null;
+  const data = JSON.parse(jsonMatch[1]);
 
-  $("a[href*='/bai-hat/']").each((i, el) => {
-    if (result) return;
+  const song = data?.items?.find(i => i.link?.includes("/bai-hat/"));
+  if (!song) return null;
 
-    const title = $(el).text().trim();
-    const link = $(el).attr("href");
-
-    if (title && link) {
-      result = {
-        title,
-        link: "https://zingmp3.vn" + link
-      };
-    }
-  });
-
-  return result;
+  return {
+    title: song.name,
+    link: "https://zingmp3.vn" + song.link
+  };
 }
 
+// Lấy link MP3 thật
 async function getMp3(songUrl) {
   const html = await axios.get(songUrl, {
     headers: { "User-Agent": "Mozilla/5.0" }
@@ -61,12 +56,11 @@ app.get("/zing", async (req, res) => {
       title: song.title,
       url: mp3
     });
-
-  } catch (e) {
+  } catch {
     res.json({ status: "error" });
   }
 });
 
 app.listen(process.env.PORT || 3000, () => {
-  console.log("Zing MCP Server Ready");
+  console.log("Zing MCP server ready");
 });
