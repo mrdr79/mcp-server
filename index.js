@@ -1,41 +1,35 @@
 import express from "express";
-import axios from "axios";
-import cors from "cors";
+import ytdl from "ytdl-core";
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-app.get("/zing", async (req, res) => {
-  const q = req.query.q;
+// GET /play?song=...
+app.get("/play", async (req, res) => {
+  const q = req.query.song;
   if (!q) return res.json({ status: "error" });
 
   try {
-    // API Zing công khai, ổn định hơn
-    const searchUrl = `https://api-zingmp3.vercel.app/api/search/song?q=${encodeURIComponent(q)}`;
-    const search = await axios.get(searchUrl);
+    const search = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`).then(r => r.text());
+    const videoIdMatch = search.match(/watch\?v=([^"&]+)/);
 
-    const song = search.data?.data?.[0];
-    if (!song) return res.json({ status: "not_found" });
+    if (!videoIdMatch) return res.json({ status: "not_found" });
 
-    const id = song.encodeId;
+    const videoId = videoIdMatch[1];
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-    const detail = await axios.get(`https://api-zingmp3.vercel.app/api/song?id=${id}`);
-    const mp3 = detail.data?.data?.["128"];
-
-    if (!mp3) return res.json({ status: "no_audio" });
+    const info = await ytdl.getInfo(url);
+    const format = ytdl.chooseFormat(info.formats, { quality: "highestaudio" });
 
     res.json({
       status: "ok",
-      title: song.title,
-      url: mp3
+      title: info.videoDetails.title,
+      url: format.url
     });
-
-  } catch (e) {
+  } catch {
     res.json({ status: "error" });
   }
 });
 
 app.listen(process.env.PORT || 3000, () => {
-  console.log("MCP Zing Server Ready");
+  console.log("YT MCP Server Ready");
 });
