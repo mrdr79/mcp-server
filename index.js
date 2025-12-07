@@ -1,23 +1,24 @@
 import express from "express";
+import axios from "axios";
 import ytdl from "ytdl-core";
 
 const app = express();
 
-// GET /play?song=...
 app.get("/play", async (req, res) => {
   const q = req.query.song;
   if (!q) return res.json({ status: "error" });
 
   try {
-    const search = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`).then(r => r.text());
-    const videoIdMatch = search.match(/watch\?v=([^"&]+)/);
+    const searchUrl = "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
+    const html = await axios.get(searchUrl).then(r => r.data);
 
+    const videoIdMatch = html.match(/watch\\?v=([^"&]+)/);
     if (!videoIdMatch) return res.json({ status: "not_found" });
 
     const videoId = videoIdMatch[1];
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const videoUrl = "https://www.youtube.com/watch?v=" + videoId;
 
-    const info = await ytdl.getInfo(url);
+    const info = await ytdl.getInfo(videoUrl);
     const format = ytdl.chooseFormat(info.formats, { quality: "highestaudio" });
 
     res.json({
@@ -25,11 +26,12 @@ app.get("/play", async (req, res) => {
       title: info.videoDetails.title,
       url: format.url
     });
-  } catch {
+
+  } catch (e) {
     res.json({ status: "error" });
   }
 });
 
 app.listen(process.env.PORT || 3000, () => {
-  console.log("YT MCP Server Ready");
+  console.log("YT server ready");
 });
